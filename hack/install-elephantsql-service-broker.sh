@@ -1,11 +1,11 @@
 #!/bin/bash
-set -eu
+set -euo pipefail
 
 cf create-org elephantsql
 cf create-space elephantsql -o elephantsql
 cf target -o elephantsql -s elephantsql
 
-SPRING_SECURITY_USER_PASSWORD=$(uuidgen | tr '[A-Z]' '[a-z]')
+SPRING_SECURITY_USER_PASSWORD=$(mktemp | sed 's|/||g')
 wget -O elephantsql-service-broker.yml https://github.com/making/elephantsql-service-broker/raw/master/manifest.yml
 cf push --no-start -f elephantsql-service-broker.yml
 cf set-env elephantsql-service-broker ELEPHANTSQL_API_KEY ${ELEPHANTSQL_API_KEY}
