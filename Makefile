@@ -51,17 +51,8 @@ create-demo-org:
 	@cf create-space demo -o demo
 	@cf target -o demo -s demo
 
-install-stratos: create-system-space
-	@cf target -o system -s system
-	@cf push console \
-	         -o splatform/stratos:stable \
-	         -m 128M \
-	         -k 384M \
-	         --no-manifest
-
-uninstall-stratos:
-	@cf target -o system -s system
-	@cf delete -r -f console
+test:
+	@./hack/smoke-test.sh
 
 post-install: login \
 			  enable-diego-docker \
