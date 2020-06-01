@@ -1,0 +1,24 @@
+---
+apiVersion: vendir.k14s.io/v1alpha1
+kind: Config
+minimumRequiredVersion: 0.8.0
+directories:
+- path: config/_deps
+  contents:
+  - path: cf-for-k8s
+    git:
+      url: git@github.com:cloudfoundry/cf-for-k8s
+      ref: master
+    includePaths:
+    - config/**/*
+    - config-optional/remove-resource-requirements.yml
+    - hack/generate-values.sh
+    - hack/run-smoke-tests.sh
+    - tests/smoke/**/*
+  - path: metrics-server
+    githubRelease:
+      slug: kubernetes-sigs/metrics-server
+      tag: v0.3.6
+      disableAutoChecksumValidation: true
+    includePaths:
+    - components.yaml
