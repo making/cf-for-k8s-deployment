@@ -58,3 +58,10 @@ post-install: login \
 			  enable-diego-docker \
 			  create-system-space \
               create-demo-org
+
+install-elephantsql-service-broker: login
+	@./hack/install-elephantsql-service-broker.sh
+
+uninstall-elephantsql-service-broker: login
+	@cf delete-service-broker elephantsql -f
+	@cf delete-org elephantsql -f
