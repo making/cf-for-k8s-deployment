@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -eu
 export SMOKE_TEST_API_ENDPOINT=api.$(bosh int $(dirname $0)/../configuration-values/deployment-values.yml --path /system_domain)
 export SMOKE_TEST_APPS_DOMAIN=$(bosh int $(dirname $0)/../configuration-values/deployment-values.yml --path /app_domains/0)
 export SMOKE_TEST_USERNAME=admin
