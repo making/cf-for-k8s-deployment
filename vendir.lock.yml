@@ -9,8 +9,4 @@ directories:
       url: https://api.github.com/repos/kubernetes-sigs/metrics-server/releases/20705532
     path: metrics-server
   path: config/_deps
-- contents: null
-  path: configuration-values
-- contents: null
-  path: hack
 kind: LockConfig
