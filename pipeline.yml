@@ -1,0 +1,322 @@
+resource_types:
+- name: azure-blobstore
+  type: docker-image
+  source:
+    repository: pcfabr/azure-blobstore-resource
+
+resources:
+- name: reissue-certificates
+  type: time
+  icon: autorenew
+  source:
+    interval: 720h
+- name: deployment
+  type: git
+  icon: github
+  source:
+    uri: https://github.com/making/cf-for-k8s-deployment
+    branch: master
+- name: certificates
+  type: azure-blobstore
+  icon: certificate
+  source:
+    storage_account_name: ((controlplane_ci_account_name))
+    storage_account_key: ((controlplane_ci_storage_account_access_key))
+    container: ((dns_subdomain))-((controlplane_ci_storage_container_name))
+    versioned_file: certificates.tgz
+- name: deployment-values
+  type: azure-blobstore
+  icon: clipboard-text
+  source:
+    storage_account_name: ((controlplane_ci_account_name))
+    storage_account_key: ((controlplane_ci_storage_account_access_key))
+    container: ((dns_subdomain))-((controlplane_ci_storage_container_name))
+    versioned_file: deployment-values.yml
+
+jobs:
+- name: generate-certificate
+  plan:
+  - in_parallel:
+    - get: reissue-certificates
+      trigger: true
+  - task: generate-certificate
+    params:
+      AZURE_CLIENT_ID: ((client_id))
+      AZURE_CLIENT_SECRET: ((client_secret))
+      AZURE_SUBSCRIPTION_ID: ((subscription_id))
+      AZURE_TENANT_ID: ((tenant_id))
+      AZURE_RESOURCE_GROUP: ((resource_group))
+      SUBDOMAIN: ((dns_subdomain)).((dns_suffix))
+      EMAIL: ((email))
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: goacme/lego
+      outputs:
+      - name: lego
+      run:
+        path: sh
+        args:
+        - -cex
+        - |
+          lego --accept-tos \
+            --key-type=rsa4096 \
+            --domains="*.${SUBDOMAIN}" \
+            --domains="*.uaa.${SUBDOMAIN}" \
+            --domains="*.login.${SUBDOMAIN}" \
+            --domains="*.apps.${SUBDOMAIN}" \
+            --domains="*.sys.${SUBDOMAIN}" \
+            --domains="*.uaa.sys.${SUBDOMAIN}" \
+            --domains="*.login.sys.${SUBDOMAIN}" \
+            --email=${EMAIL} \
+            --dns=azure \
+            run
+          tar czf certificates.tgz -C .lego certificates
+          mv certificates.tgz lego
+  - put: certificates
+    params:
+      file: lego/certificates.tgz
+
+- name: generate-values
+  plan:
+  - in_parallel:
+    - get: certificates
+      passed:
+      - generate-certificate
+    - get: deployment
+  - task: generate-values
+    params:
+      DOMAIN: ((dns_subdomain)).((dns_suffix))
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      inputs:
+      - name: deployment
+      - name: certificates
+      outputs:
+      - name: deployment-values
+      run:
+        path: bash
+        args:
+        - -cexo
+        - pipefail
+        - |
+          cd deployment
+          ./config/_deps/cf-for-k8s/hack/generate-values.sh \
+          	    -d ${DOMAIN} > deployment-values.yml
+          tar xzf ../certificates/certificates.tgz
+          APPS_DOMAIN=$(bosh int deployment-values.yml --path /app_domains/0)
+          cat <<EOF > ops.yml
+          - type: replace
+            path: /system_certificate
+            value:
+              crt: "$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')"
+              key: "$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')"
+              ca: ""
+          - type: replace
+            path: /workloads_certificate
+            value:
+              crt: "$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')"
+              key: "$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')"
+              ca: ""
+          - type: remove
+            path: /app_domains
+          EOF
+          cat <<EOF > ../deployment-values/deployment-values.yml
+          #@data/values
+          ---
+          app_domains:
+          #@overlay/append
+          - "${APPS_DOMAIN}"
+          EOF
+          bosh int deployment-values.yml -o ops.yml >> ../deployment-values/deployment-values.yml
+
+
+  - put: deployment-values
+    params:
+      file: deployment-values/deployment-values.yml
+
+- name: deploy-cf-for-k8s
+  plan:
+  - in_parallel:
+    - get: deployment
+    - get: deployment-values
+      passed:
+      - generate-values
+      trigger: true
+  - task: deploy-cf-for-k8s
+    params:
+      KUBECONFIG_VALUE: ((kubeconfig))
+      APP_REGISTRY_USERNAME: ((docker_username))
+      APP_REGISTRY_PASSWORD: ((docker_password))
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      inputs:
+      - name: deployment
+      - name: deployment-values
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          mkdir -p ~/.kube
+          cat <<EOF > ~/.kube/config
+          ${KUBECONFIG_VALUE}
+          EOF
+
+          cd deployment
+          ./hack/configure-app-registry.sh
+          ytt --ignore-unknown-comments \
+              -f config \
+              -f configuration-values \
+              -f ../deployment-values > rendered/cf-for-k8s.yml
+          kapp deploy -a cf -f rendered/cf-for-k8s.yml -c -y
+
+- name: smoke-test
+  plan:
+  - in_parallel:
+    - get: deployment
+    - get: deployment-values
+      passed:
+      - deploy-cf-for-k8s
+      trigger: true
+  - task: prepare-env
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      inputs:
+      - name: deployment-values
+      outputs:
+      - name: env
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          cat <<EOF > env/env.sh
+          export SMOKE_TEST_API_ENDPOINT=api.$(bosh int deployment-values/deployment-values.yml --path /system_domain)
+          export SMOKE_TEST_APPS_DOMAIN=$(bosh int deployment-values/deployment-values.yml --path /app_domains/0)
+          export SMOKE_TEST_USERNAME=admin
+          export SMOKE_TEST_PASSWORD=$(bosh int deployment-values/deployment-values.yml  --path /cf_admin_password)
+          export SMOKE_TEST_SKIP_SSL=false
+          EOF
+
+  - task: smoke-test
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-test-runner
+      inputs:
+      - name: env
+      - name: deployment
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          source env/env.sh
+          deployment/config/_deps/cf-for-k8s/hack/run-smoke-tests.sh
+
+- name: post-deploy
+  plan:
+  - in_parallel:
+    - get: deployment
+    - get: deployment-values
+      passed:
+      - smoke-test
+      trigger: true
+  - task: prepare-env
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      inputs:
+      - name: deployment-values
+      outputs:
+      - name: env
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          cat <<EOF > env/env.sh
+          export SYSTEM_DOMAIN=$(bosh int deployment-values/deployment-values.yml --path /system_domain)
+          export APPS_DOMAIN=$(bosh int deployment-values/deployment-values.yml --path /app_domains/0)
+          export CF_USERNAME=admin
+          export CF_PASSWORD=$(bosh int deployment-values/deployment-values.yml  --path /cf_admin_password)
+          EOF
+          cp /usr/local/bin/bosh env/
+  - task: post-deploy
+    params:
+      ELEPHANTSQL_API_KEY: ((elephantsql_api_key))
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-test-runner
+      inputs:
+      - name: env
+      - name: deployment
+      - name: deployment-values
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          export PATH=${PATH}:${PWD}/env
+          source env/env.sh
+          cp deployment-values/deployment-values.yml deployment/configuration-values
+          cf login -a api.${SYSTEM_DOMAIN} \
+          	       -u ${CF_USERNAME} \
+          	       -p ${CF_PASSWORD}\
+          	       -o system
+          cf enable-feature-flag diego_docker
+          cf create-space system -o system
+          cf create-org demo
+          cf create-space demo -o demo
+          ./deployment/hack/install-elephantsql-service-broker.sh
+
+- name: delete-cf-for-k8s
+  plan:
+  - in_parallel:
+    - get: deployment
+  - task: delete-cf-for-k8s
+    params:
+      KUBECONFIG_VALUE: ((kubeconfig))
+      APP_REGISTRY_USERNAME: ((docker_username))
+      APP_REGISTRY_PASSWORD: ((docker_password))
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      inputs:
+      - name: deployment
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          mkdir -p ~/.kube
+          cat <<EOF > ~/.kube/config
+          ${KUBECONFIG_VALUE}
+          EOF
+          kapp delete -a cf -y
