@@ -26,11 +26,13 @@ spec:
         args:
         - client
         - --remote=$(INLETS_REMOTE)
-        - --upstream=http://localhost:80
+        - --upstream=$(INLETS_UPSTREAM)
         - --token-from=/var/inlets/token
         env:
         - name: INLETS_REMOTE
           value: #@ data.values.inlets_remote
+        - name: INLETS_UPSTREAM
+          value: #@ data.values.inlets_upstream
         volumeMounts:
         - name: inlets-token-volume
           mountPath: /var/inlets/
