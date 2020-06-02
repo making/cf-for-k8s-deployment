@@ -21,3 +21,9 @@ uaac client add log_cache_ui \
   --refresh_token_validity 259200 \
   --redirect_uri ${REDIRECT_URLS}
 set -e
+
+wget -O log-cache-ui.yml https://github.com/making/log-cache-ui/raw/master/manifest.yml
+cf push --var system_domain=${SYSTEM_DOMAIN} --no-start -f log-cache-ui.yml
+cf set-env log-cache-ui UAA_CLIENT_SECRET ${UAA_UI_CLIENT_SECRET}
+cf start log-cache-ui
+rm -f log-cache-ui.yml
