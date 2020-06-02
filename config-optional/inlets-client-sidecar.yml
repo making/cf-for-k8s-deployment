@@ -20,7 +20,7 @@ spec:
       containers:
       #@overlay/match by="name", missing_ok=True
       - name: inlets-client
-        image: inlets/inlets:2.7.0
+        image: inlets/inlets:2.7.3
         imagePullPolicy: Always
         command: ["inlets"]
         args:
