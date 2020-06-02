@@ -154,6 +154,9 @@ jobs:
       KUBECONFIG_VALUE: ((kubeconfig))
       APP_REGISTRY_USERNAME: ((docker_username))
       APP_REGISTRY_PASSWORD: ((docker_password))
+      INLETS_REMOTE: ((inlets_remote))
+      INLETS_UPSTREAM: ((inlets_upstream))
+      INLETS_TOKEN: ((inlets_token))
     config:
       platform: linux
       image_resource:
@@ -175,8 +178,16 @@ jobs:
 
           cd deployment
           ./hack/configure-app-registry.sh
+
+          cat <<EOF >> config/_deps/cf-for-k8s/config/values.yml
+          inlets_remote: "${INLETS_REMOTE}"
+          inlets_upstream: "${INLETS_UPSTREAM}"
+          inlets_token: "${INLETS_TOKEN}"
+          EOF
+
           ytt --ignore-unknown-comments \
               -f config \
+              -f config-optional \
               -f configuration-values \
               -f ../deployment-values > rendered/cf-for-k8s.yml
           kapp deploy -a cf -f rendered/cf-for-k8s.yml -c -y
@@ -320,3 +331,43 @@ jobs:
           ${KUBECONFIG_VALUE}
           EOF
           kapp delete -a cf -y
+
+- name: upload-certificates-to-exit-server
+  plan:
+  - in_parallel:
+    - get: certificates
+      passed:
+      - generate-certificate
+      trigger: true
+  - task: upload-certificates-to-exit-server
+    params:
+      DOMAIN: ((dns_subdomain)).((dns_suffix))
+      EXIT_SERVER_IP: ((ssh_server_ip))
+      EXIT_SERVER_SSH_PRIVATE_KEY: ((exit_server_ssh_private_key))
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      inputs:
+      - name: certificates
+      run:
+        path: bash
+        args:
+        - -cexo
+        - pipefail
+        - |
+          cat <<EOF > ssh.pem
+          ${EXIT_SERVER_SSH_PRIVATE_KEY}
+          EOF
+          tar xzf ./certificates/certificates.tgz
+          chmod 600 ssh.pem
+          scp -o "StrictHostKeyChecking=no" \
+              -i ssh.pem \
+              ./certificates/_.* \
+              jumpbox@${EXIT_SERVER_IP}:/tmp/
+          ssh -o "StrictHostKeyChecking=no" \
+              -i ssh.pem \
+              jumpbox@${EXIT_SERVER_IP} \
+              'sudo chown root:www-data /tmp/_.* && sudo chmod g+r /tmp/_.* && sudo mv /tmp/_.* /etc/ssl/caddy/config/lego/certificates/'
