@@ -8,9 +8,6 @@ cf target -o log-cache-ui -s log-cache-ui
 REDIRECT_URLS=https://log-cache-ui.${APPS_DOMAIN}/login/oauth2/code/uaa
 UAA_UI_CLIENT_SECRET=$(mktemp | sed 's|/||g')
 
-uaac target uaa.${SYSTEM_DOMAIN}
-uaac token client get admin -s ${ADMIN_CLIENT_SECRET}
-
 set +e
 uaac client add log_cache_ui \
   --name log_cache_ui \

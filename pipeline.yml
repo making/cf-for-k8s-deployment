@@ -271,6 +271,7 @@ jobs:
           export APPS_DOMAIN=$(bosh int deployment-values/deployment-values.yml --path /app_domains/0)
           export CF_USERNAME=admin
           export CF_PASSWORD=$(bosh int deployment-values/deployment-values.yml  --path /cf_admin_password)
+          export ADMIN_CLIENT_SECRET=$(bosh int deployment-values/deployment-values.yml  --path /uaa/admin_client_secret)
           EOF
           cp /usr/local/bin/bosh env/
   - task: post-deploy
@@ -303,6 +304,31 @@ jobs:
           cf create-org demo
           cf create-space demo -o demo
           ./deployment/hack/install-elephantsql-service-broker.sh
+  - task: post-deploy-with-uaa
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: starkandwayne/concourse
+      inputs:
+      - name: env
+      - name: deployment
+      - name: deployment-values
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          export PATH=${PATH}:${PWD}/env
+          source env/env.sh
+          cf login -a api.${SYSTEM_DOMAIN} \
+          	       -u ${CF_USERNAME} \
+          	       -p ${CF_PASSWORD}\
+          	       -o system
+          uaac target uaa.${SYSTEM_DOMAIN}
+          uaac token client get admin -s ${ADMIN_CLIENT_SECRET}
+          // Do something
 
 - name: delete-cf-for-k8s
   plan:
@@ -331,6 +357,28 @@ jobs:
           ${KUBECONFIG_VALUE}
           EOF
           kapp delete -a cf -y
+
+- name: show-generated-values
+  plan:
+  - in_parallel:
+    - get: deployment-values
+      passed:
+      - generate-values
+  - task: show-generated-values
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      inputs:
+      - name: deployment-values
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          cat deployment-values/deployment-values.yml
 
 - name: upload-certificates-to-exit-server
   plan:
