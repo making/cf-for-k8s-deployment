@@ -141,7 +141,7 @@ jobs:
     params:
       file: deployment-values/deployment-values.yml
 
-- name: deploy-cf-for-k8s
+- name: see-changes
   plan:
   - in_parallel:
     - get: deployment
@@ -157,7 +157,8 @@ jobs:
       INLETS_REMOTE: ((inlets_remote))
       INLETS_UPSTREAM: ((inlets_upstream))
       INLETS_TOKEN: ((inlets_token))
-    config:
+      KAPP_OPTS: --diff-run
+    config: &kapp-deploy
       platform: linux
       image_resource:
         type: docker-image
@@ -190,7 +191,29 @@ jobs:
               -f config-optional \
               -f configuration-values \
               -f ../deployment-values > rendered/cf-for-k8s.yml
-          kapp deploy -a cf -f rendered/cf-for-k8s.yml -c -y
+          kapp deploy -a cf -f rendered/cf-for-k8s.yml -c ${KAPP_OPTS}
+
+- name: deploy-cf-for-k8s
+  plan:
+  - in_parallel:
+    - get: deployment
+      passed:
+      - see-changes
+    - get: deployment-values
+      passed:
+      - see-changes
+      trigger: true
+  - task: deploy-cf-for-k8s
+    params:
+      KUBECONFIG_VALUE: ((kubeconfig))
+      APP_REGISTRY_USERNAME: ((docker_username))
+      APP_REGISTRY_PASSWORD: ((docker_password))
+      INLETS_REMOTE: ((inlets_remote))
+      INLETS_UPSTREAM: ((inlets_upstream))
+      INLETS_TOKEN: ((inlets_token))
+      KAPP_OPTS: -y
+    config:
+      <<: *kapp-deploy
 
 - name: smoke-test
   plan:
