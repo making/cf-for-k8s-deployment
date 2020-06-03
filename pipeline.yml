@@ -4,6 +4,15 @@ resource_types:
   source:
     repository: pcfabr/azure-blobstore-resource
 
+params:
+  smtp: &smtp-params
+    SMTP_HOST: ((smtp_host))
+    SMTP_PORT: ((smtp_port))
+    SMTP_USER: ((smtp_user))
+    SMTP_PASSWORD: ((smtp_password))
+    SMTP_STARTTLS: ((smtp_starttls))
+    SMTP_FROM_ADDRESS: ((smtp_from_address))
+
 resources:
 - name: reissue-certificates
   type: time
@@ -157,6 +166,7 @@ jobs:
       INLETS_REMOTE: ((inlets_remote))
       INLETS_UPSTREAM: ((inlets_upstream))
       INLETS_TOKEN: ((inlets_token))
+      <<: *smtp-params
       KAPP_OPTS: --diff-run
     config: &kapp-deploy
       platform: linux
@@ -180,7 +190,22 @@ jobs:
           cd deployment
           ./hack/configure-app-registry.sh
 
-          wget https://raw.githubusercontent.com/making/cf-for-k8s-deployment/master/logo/logo_transparent.png
+          sed -i -e "/smtp:/,/from_address:/ d" \
+                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+          cat <<EOF >> smtp.yml
+          smtp:
+            host: ${SMTP_HOST}
+            port: ${SMTP_PORT}
+            user: ${SMTP_USER}
+            password: ${SMTP_PASSWORD}
+            from_address: ${SMTP_FROM_ADDRESS}
+            auth: true
+            starttls: ${SMTP_STARTTLS}
+          EOF
+          sed -i -e "/#@ end/i $(cat smtp.yml | perl -pe 's/\n/\\n/g')" \
+                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+
+          wget -q https://raw.githubusercontent.com/making/cf-for-k8s-deployment/master/logo/logo_transparent.png
           # hack
           cat <<EOF > branding-config.yml
           login:
@@ -189,10 +214,11 @@ jobs:
               productLogo: $(cat logo/logo_transparent.png| base64 | tr -d '\n')
               squareLogo: $(cat logo/logo_transparent.png| base64 | tr -d '\n')
           EOF
+          set +x
           sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
                  config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
-
+          set -x
           cat <<EOF >> config/_deps/cf-for-k8s/config/values.yml
           inlets_remote: "${INLETS_REMOTE}"
           inlets_upstream: "${INLETS_UPSTREAM}"
@@ -224,6 +250,7 @@ jobs:
       INLETS_REMOTE: ((inlets_remote))
       INLETS_UPSTREAM: ((inlets_upstream))
       INLETS_TOKEN: ((inlets_token))
+      <<: *smtp-params
       KAPP_OPTS: -y
     config:
       <<: *kapp-deploy
@@ -364,7 +391,7 @@ jobs:
           	       -o system
           uaac target uaa.${SYSTEM_DOMAIN}
           uaac token client get admin -s ${ADMIN_CLIENT_SECRET}
-          // Do something
+          # Do something
 
 - name: delete-cf-for-k8s
   plan:
