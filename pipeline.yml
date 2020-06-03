@@ -340,6 +340,12 @@ jobs:
   - task: post-deploy
     params:
       ELEPHANTSQL_API_KEY: ((elephantsql_api_key))
+      SHARED_MYSQL_HOSTNAME: ((shared_mysql_hostname))
+      SHARED_MYSQL_PORT: ((shared_mysql_port))
+      SHARED_MYSQL_USERNAME: ((shared_mysql_username))
+      SHARED_MYSQL_PASSWORD: ((shared_mysql_password))
+      SHARED_MYSQL_DATABASE: ((shared_mysql_database))
+      SHARED_MYSQL_BROKER_ADMIN_PASSWORD: ((shared_mysql_broker_admin_password))
     config:
       platform: linux
       image_resource:
@@ -367,6 +373,7 @@ jobs:
           cf create-org demo
           cf create-space demo -o demo
           ./deployment/hack/install-elephantsql-service-broker.sh
+          ./deployment/hack/install-shared-mysql-service-broker.sh
   - task: post-deploy-with-uaa
     config:
       platform: linux
