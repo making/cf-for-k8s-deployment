@@ -149,7 +149,7 @@ jobs:
       passed:
       - generate-values
       trigger: true
-  - task: deploy-cf-for-k8s
+  - task: see-changes
     params:
       KUBECONFIG_VALUE: ((kubeconfig))
       APP_REGISTRY_USERNAME: ((docker_username))
@@ -179,6 +179,19 @@ jobs:
 
           cd deployment
           ./hack/configure-app-registry.sh
+
+          wget https://raw.githubusercontent.com/making/cf-for-k8s-deployment/master/logo/logo_transparent.png
+          # hack
+          cat <<EOF > branding-config.yml
+          login:
+            branding:
+              companyName: cf.maki.lol
+              productLogo: $(cat logo/logo_transparent.png| base64 | tr -d '\n')
+              squareLogo: $(cat logo/logo_transparent.png| base64 | tr -d '\n')
+          EOF
+          sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
+                 -e 's/login:$//'\
+                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
 
           cat <<EOF >> config/_deps/cf-for-k8s/config/values.yml
           inlets_remote: "${INLETS_REMOTE}"
