@@ -28,7 +28,7 @@ applications:
 EOF
 cf push shared-mysql-service-broker -f shared-mysql-service-broker.yml
 set +e
-cf create-service-broker shared-mysql admin SERVICE_BROKER_ADMIN_PASSWORD https://shared-mysql-service-broker.${APPS_DOMAIN}
+cf create-service-broker shared-mysql admin ${SHARED_MYSQL_BROKER_ADMIN_PASSWORD} https://shared-mysql-service-broker.${APPS_DOMAIN}
 set -e
 cf enable-service-access shared-mysql
 
