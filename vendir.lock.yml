@@ -2,8 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Add priority class to DaemonSets...
-      sha: 86f5a6ed49ff6f132104c52c4a983b202c304211
+      commitTitle: 'DOC: also bump suggested resource min in docs...'
+      sha: e61ba6425502077e9daf2f78fcd2c697b76cb4e3
     path: cf-for-k8s
   - githubRelease:
       url: https://api.github.com/repos/kubernetes-sigs/metrics-server/releases/20705532

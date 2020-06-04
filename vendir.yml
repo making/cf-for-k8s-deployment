@@ -8,7 +8,7 @@ directories:
   - path: cf-for-k8s
     git:
       url: git@github.com:cloudfoundry/cf-for-k8s
-      ref: master
+      ref: v0.3.0
     includePaths:
     - config/**/*
     - config-optional/remove-resource-requirements.yml
