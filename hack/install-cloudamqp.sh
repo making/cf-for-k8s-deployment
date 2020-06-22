@@ -5,6 +5,7 @@ cf create-org cloudamqp
 cf create-space cloudamqp -o cloudamqp
 cf target -o cloudamqp -s cloudamqp
 
+rm -rf cloudamqp-service-broker
 git clone https://github.com/making/cloudamqp-service-broker
 cd cloudamqp-service-broker
 cat <<EOF > cloudamqp-service-broker.yml
