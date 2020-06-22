@@ -128,7 +128,7 @@ jobs:
         - pipefail
         - |
           cd deployment
-          ./config/_ytt_lib/cf-for-k8s/hack/generate-values.sh \
+          ./config/_deps/cf-for-k8s/hack/generate-values.sh \
           	    -d ${DOMAIN} > deployment-values.yml
           tar xzf ../certificates/certificates.tgz
           APPS_DOMAIN=$(bosh int deployment-values.yml --path /app_domains/0)
@@ -203,7 +203,7 @@ jobs:
           ./hack/configure-app-registry.sh
 
           sed -i -e "/smtp:/,/from_address:/ d" \
-                 config/_ytt_lib/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
           cat <<EOF >> smtp.yml
           smtp:
             host: ${SMTP_HOST}
@@ -215,7 +215,7 @@ jobs:
             starttls: ${SMTP_STARTTLS}
           EOF
           sed -i -e "/#@ end/i $(cat smtp.yml | perl -pe 's/\n/\\n/g')" \
-                 config/_ytt_lib/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
 
           wget -q https://raw.githubusercontent.com/making/cf-for-k8s-deployment/master/logo/logo_transparent.png
           # hack
@@ -229,9 +229,9 @@ jobs:
           set +x
           sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
-                 config/_ytt_lib/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
           set -x
-          cat <<EOF >> config/_ytt_lib/cf-for-k8s/config/values.yml
+          cat <<EOF >> config/_deps/cf-for-k8s/config/values.yml
           inlets_remote: "${INLETS_REMOTE}"
           inlets_upstream: "${INLETS_UPSTREAM}"
           inlets_token: "${INLETS_TOKEN}"
@@ -317,7 +317,7 @@ jobs:
         - -cex
         - |
           source env/env.sh
-          deployment/config/_ytt_lib/cf-for-k8s/hack/run-smoke-tests.sh
+          deployment/config/_deps/cf-for-k8s/hack/run-smoke-tests.sh
     on_success:
       put: notify
       params:

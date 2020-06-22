@@ -8,5 +8,5 @@ directories:
   - githubRelease:
       url: https://api.github.com/repos/kubernetes-sigs/metrics-server/releases/20705532
     path: metrics-server
-  path: config/_ytt_lib
+  path: config/_deps
 kind: LockConfig
