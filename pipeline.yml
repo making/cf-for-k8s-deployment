@@ -3,6 +3,10 @@ resource_types:
   type: docker-image
   source:
     repository: pcfabr/azure-blobstore-resource
+- name: slack-notifier
+  type: docker-image
+  source:
+    repository: mockersf/concourse-slack-notifier
 
 params:
   smtp: &smtp-params
@@ -41,6 +45,14 @@ resources:
     storage_account_key: ((controlplane_ci_storage_account_access_key))
     container: ((dns_subdomain))-((controlplane_ci_storage_container_name))
     versioned_file: deployment-values.yml
+- name: scheduler
+  type: time
+  source:
+    interval: 1h
+- name: notify
+  type: slack-notifier
+  source:
+    url: ((slack_webhook_url))
 
 jobs:
 - name: generate-certificate
@@ -263,6 +275,8 @@ jobs:
       passed:
       - deploy-cf-for-k8s
       trigger: true
+    - get: scheduler
+      trigger: true
   - task: prepare-env
     config:
       platform: linux
@@ -304,6 +318,14 @@ jobs:
         - |
           source env/env.sh
           deployment/config/_deps/cf-for-k8s/hack/run-smoke-tests.sh
+    on_success:
+      put: notify
+      params:
+        alert_type: success
+    on_failure:
+      put: notify
+      params:
+        alert_type: failed
 
 - name: post-deploy
   plan:
