@@ -7,24 +7,10 @@
 #@ def networking_values():
 systemNamespace: #@ data.values.system_namespace
 workloadsNamespace: #@ data.values.workloads_namespace
-
-cfroutesync:
-  #@ if/end data.values.images.cfroutesync:
-  image: #@ data.values.images.cfroutesync
-
-  ccCA: #@ base64.decode(data.values.internal_certificate.ca)
-  ccBaseURL: #@ "http://capi." + data.values.system_namespace + ".svc.cluster.local"
-  uaaCA: #@ base64.decode(data.values.internal_certificate.ca)
-  uaaBaseURL: #@ "http://uaa." + data.values.system_namespace + ".svc.cluster.local:8080"
-  clientName: "cf-k8s-networking"
-  clientSecret: #@ data.values.uaa.admin_client_secret
 #@ end
 
 #@ networking = library.get("github.com/cloudfoundry/cf-k8s-networking")
 --- #@ template.replace(networking.with_data_values(networking_values()).eval())
-
-#@ metacontroller = library.get("metacontroller")
---- #@ template.replace(metacontroller.eval())
 
 #! Istio Configurations
 
@@ -36,23 +22,27 @@ metadata:
     #@overlay/match missing_ok=True
     cf-for-k8s.cloudfoundry.org/istio-system-ns: ""
 
-#@ cf_namespaces = [data.values.system_namespace, data.values.workloads_namespace , "cf-db", "cf-blobstore", "metacontroller"]
+#@ kind_deployment = overlay.subset({"kind":"Deployment"})
+#@ kind_replica_set = overlay.subset({"kind":"ReplicaSet"})
+#@ kind_stateful_set = overlay.subset({"kind":"StatefulSet"})
+#@ kind_daemon_set = overlay.subset({"kind":"DaemonSet"})
+#@ kind_job = overlay.subset({"kind":"Job"})
+#@ contains_pod = overlay.or_op(kind_deployment, kind_replica_set, kind_stateful_set, kind_daemon_set, kind_job)
 
-#! Enable istio sidecar injection on cf namespaces
-#@ for namespace in cf_namespaces:
-#@overlay/match by=overlay.subset({"metadata":{"namespace": namespace}}), expects="1+"
+#@ namespaced = lambda idx,old,new: "namespace" in old["metadata"]
+#@ not_inside_istio_ns = overlay.not_op(overlay.subset({"metadata":{"namespace":"istio-system"}}))
+
+#@overlay/match by=overlay.and_op(contains_pod, namespaced, not_inside_istio_ns), expects="1+"
 ---
 metadata:
   #@overlay/match missing_ok=True
   annotations:
     #@overlay/match missing_ok=True
     kapp.k14s.io/change-rule.istio-sidecar-injector: "upsert after upserting cf-for-k8s.cloudfoundry.org/istio-sidecar-injector"
-#@ end
 
 #! Because the istio sidecar injector is a mutatingwebhook on pod create, we need to guarantee its creation before we start creating pods
 #! in cf namespaces.
 
-#@ for namespace in cf_namespaces:
 #@overlay/match by=overlay.subset({"kind": "MutatingWebhookConfiguration", "metadata":{"name": "istio-sidecar-injector"}})
 ---
 metadata:
@@ -61,11 +51,13 @@ metadata:
     #@overlay/match missing_ok=True
     kapp.k14s.io/change-group: cf-for-k8s.cloudfoundry.org/istio-sidecar-injector
 
-#@overlay/match by=overlay.subset({"kind":"Namespace", "metadata":{"name": namespace}})
+#@ is_ns = overlay.subset({"kind":"Namespace"})
+#@ not_istio_ns = overlay.not_op(overlay.subset({"metadata":{"name":"istio-system"}}))
+
+#@overlay/match by=overlay.and_op(is_ns, not_istio_ns), expects="1+"
 ---
 metadata:
   #@overlay/match missing_ok=True
   labels:
     #@overlay/match missing_ok=True
     istio-injection: enabled
-#@ end
