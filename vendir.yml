@@ -11,14 +11,9 @@ directories:
       ref: master
     includePaths:
     - config/**/*
+    - config-optional/add-metrics-server-components.yml
+    - config-optional/patch-metrics-server.yml
     - config-optional/remove-resource-requirements.yml
     - hack/generate-values.sh
     - hack/run-smoke-tests.sh
     - tests/smoke/**/*
-  - path: metrics-server
-    githubRelease:
-      slug: kubernetes-sigs/metrics-server
-      tag: v0.3.6
-      disableAutoChecksumValidation: true
-    includePaths:
-    - components.yaml
