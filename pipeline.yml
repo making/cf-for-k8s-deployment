@@ -230,6 +230,9 @@ jobs:
           sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
                  config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+
+          sed -i -e "s|cf_autodetect_builder: cloudfoundry/cnb.*|cf_autodetect_builder: gcr.io/paketo-buildpacks/builder:base|" \
+                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/capi-k8s-release/values/images.yml
           set -x
           cat <<EOF >> config/_deps/cf-for-k8s/config/values.yml
           inlets_remote: "${INLETS_REMOTE}"
@@ -321,10 +324,12 @@ jobs:
     on_success:
       put: notify
       params:
+        message: ✅ Smoke test succeeded!
         alert_type: success
     on_failure:
       put: notify
       params:
+        message: ❌ Smoke test failed!
         alert_type: failed
 
 - name: post-deploy
