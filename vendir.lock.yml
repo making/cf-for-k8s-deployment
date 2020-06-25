@@ -2,8 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Re-add kbld in order to preserve k14s image...
-      sha: 6b94aa1dcfe27c432bc72fd0389fef860a73c4d5
+      commitTitle: Bump capi-k8s-release to a57882ad77cf480bc7c7d5d9cc99eb347f34bda2
+      sha: 14e0bf140aab34874bbbda4a4cc21f70cbc34b78
     path: cf-for-k8s
   path: config/_deps
 kind: LockConfig
