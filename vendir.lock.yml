@@ -2,8 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Bump capi-k8s-release to 213036a3af4e65997c51ec6b139e5757acbbcd42
-      sha: d9cf7e018d84bcf07088c94e86a1bf7cada6b253
+      commitTitle: Bump capi-k8s-release to 5fb4c89475b347fce449068e9f260732a0e43d74
+      sha: 9854f5b0e250fbdf11b33abd956ae5a53efe7866
     path: cf-for-k8s
   path: config/_deps
 kind: LockConfig
