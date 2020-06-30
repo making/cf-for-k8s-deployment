@@ -7,7 +7,7 @@ cat <<EOF >"$(dirname $0)/../configuration-values/app-registry-values.yml"
 ---
 app_registry:
   hostname: ${APP_REGISTRY_HOSTNAME}
-  repository: ${APP_REGISTRY_USERNAME}
+  repository: ${APP_REGISTRY_REPOSITORY}
   username: ${APP_REGISTRY_USERNAME}
   password: ${APP_REGISTRY_PASSWORD}
 EOF
