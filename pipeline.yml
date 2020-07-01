@@ -9,6 +9,15 @@ resource_types:
     repository: mockersf/concourse-slack-notifier
 
 params:
+  deploy: &deploy-params
+    KUBECONFIG_VALUE: ((kubeconfig))
+    APP_REGISTRY_USERNAME: ((docker_username))
+    APP_REGISTRY_PASSWORD: ((docker_password))
+    APP_REGISTRY_HOSTNAME: ((docker_hostname))
+    APP_REGISTRY_REPOSITORY: ((docker_repository))
+    INLETS_REMOTE: ((inlets_remote))
+    INLETS_UPSTREAM: ((inlets_upstream))
+    INLETS_TOKEN: ((inlets_token))    
   smtp: &smtp-params
     SMTP_HOST: ((smtp_host))
     SMTP_PORT: ((smtp_port))
@@ -172,12 +181,7 @@ jobs:
       trigger: true
   - task: see-changes
     params:
-      KUBECONFIG_VALUE: ((kubeconfig))
-      APP_REGISTRY_USERNAME: ((docker_username))
-      APP_REGISTRY_PASSWORD: ((docker_password))
-      INLETS_REMOTE: ((inlets_remote))
-      INLETS_UPSTREAM: ((inlets_upstream))
-      INLETS_TOKEN: ((inlets_token))
+      <<: *deploy-params
       <<: *smtp-params
       KAPP_OPTS: --diff-run
     config: &kapp-deploy
@@ -259,12 +263,7 @@ jobs:
       trigger: true
   - task: deploy-cf-for-k8s
     params:
-      KUBECONFIG_VALUE: ((kubeconfig))
-      APP_REGISTRY_USERNAME: ((docker_username))
-      APP_REGISTRY_PASSWORD: ((docker_password))
-      INLETS_REMOTE: ((inlets_remote))
-      INLETS_UPSTREAM: ((inlets_upstream))
-      INLETS_TOKEN: ((inlets_token))
+      <<: *deploy-params
       <<: *smtp-params
       KAPP_OPTS: -y
     config:
