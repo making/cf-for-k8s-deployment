@@ -2,8 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'DEV: post reminder to clean pool clusters on Tues and Fri'
-      sha: 5e97f4786b7a540c74f83f23812dec1f5b0008b4
+      commitTitle: Fix Eirini build values for bump to 1.7...
+      sha: ee805a629c4a33fb347db07526a0ca0ec3737ae7
     path: cf-for-k8s
   path: config/_deps
 kind: LockConfig
