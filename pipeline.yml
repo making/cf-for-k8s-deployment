@@ -14,7 +14,7 @@ params:
     APP_REGISTRY_USERNAME: ((docker_username))
     APP_REGISTRY_PASSWORD: ((docker_password))
     APP_REGISTRY_HOSTNAME: ((docker_hostname))
-    APP_REGISTRY_REPOSITORY: ((docker_repository))
+    APP_REGISTRY_REPOSITORY_PREFIX: ((docker_repository))
     INLETS_REMOTE: ((inlets_remote))
     INLETS_UPSTREAM: ((inlets_upstream))
     INLETS_TOKEN: ((inlets_token))    
@@ -54,14 +54,16 @@ resources:
     storage_account_key: ((controlplane_ci_storage_account_access_key))
     container: ((dns_subdomain))-((controlplane_ci_storage_container_name))
     versioned_file: deployment-values.yml
-- name: scheduler
-  type: time
-  source:
-    interval: 1h
 - name: notify
   type: slack-notifier
+  icon: slack
   source:
     url: ((slack_webhook_url))
+- name: synchronizer
+  type: time
+  icon: autorenew
+  source:
+    interval: 10m
 
 jobs:
 - name: generate-certificate
@@ -261,6 +263,7 @@ jobs:
       passed:
       - see-changes
       trigger: true
+    - get: synchronizer
   - task: deploy-cf-for-k8s
     params:
       <<: *deploy-params
@@ -268,7 +271,11 @@ jobs:
       KAPP_OPTS: -y
     config:
       <<: *kapp-deploy
-
+    on_failure:
+      put: notify
+      params:
+        message: ❌ Deploying CF4k8s failed!
+        alert_type: failed
 - name: smoke-test
   plan:
   - in_parallel:
@@ -277,8 +284,10 @@ jobs:
       passed:
       - deploy-cf-for-k8s
       trigger: true
-    - get: scheduler
+    - get: synchronizer
       trigger: true
+      passed:
+      - deploy-cf-for-k8s
   - task: prepare-env
     config:
       platform: linux
