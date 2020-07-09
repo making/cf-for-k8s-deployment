@@ -412,6 +412,10 @@ jobs:
   - task: post-deploy-with-uaa
     params:
       CF_MGMT_SECRET: ((cf_mgmt_secret))
+      TAS_UUID: ((tas_uuid))
+      TAS_NAME: ((tas_name))
+      DEVCONNECT_LOGIN_CLIENT_SECRET: ((devconnect_login_client_secret))
+      DEVCONNECT_AUTH_CLIENT_SECRET: ((devconnect_auth_client_secret))
     config:
       platform: linux
       image_resource:
@@ -441,6 +445,21 @@ jobs:
             --secret ${CF_MGMT_SECRET} \
             --authorized_grant_types client_credentials,refresh_token \
             --authorities cloud_controller.admin,scim.read,scim.write,routing.router_groups.read
+          set -e
+          set +e
+          uaac client add devconnect_login_client \
+            --name devconnect_login_client \
+            --secret ${DEVCONNECT_LOGIN_CLIENT_SECRET} \
+            --scope openid,profile \
+            --authorized_grant_types authorization_code \
+            --redirect_uri https://devconnect.${APPS_DOMAIN}/oauth2
+          set -e
+          set +e
+          uaac client add devconnect_${TAS_NAME}_auth_client \
+            --name devconnect_${TAS_NAME}_auth_client \
+            --secret ${DEVCONNECT_AUTH_CLIENT_SECRET} \
+            --scope openid --authorized_grant_types authorization_code \
+            --redirect_uri https://devconnect.${APPS_DOMAIN}/api/v1/foundations/${TAS_UUID}/oauth2
           set -e
 
 - name: delete-cf-for-k8s
