@@ -410,6 +410,8 @@ jobs:
           ./deployment/hack/install-elephantsql-service-broker.sh
           ./deployment/hack/install-shared-mysql-service-broker.sh
   - task: post-deploy-with-uaa
+    params:
+      CF_MGMT_SECRET: ((cf_mgmt_secret))
     config:
       platform: linux
       image_resource:
@@ -433,7 +435,13 @@ jobs:
           	       -o system
           uaac target uaa.${SYSTEM_DOMAIN}
           uaac token client get admin -s ${ADMIN_CLIENT_SECRET}
-          # Do something
+          set +e
+          uaac client add cf-mgmt \
+            --name cf-mgmt \
+            --secret ${CF_MGMT_SECRET} \
+            --authorized_grant_types client_credentials,refresh_token \
+            --authorities cloud_controller.admin,scim.read,scim.write,routing.router_groups.read
+          set -e
 
 - name: delete-cf-for-k8s
   plan:
