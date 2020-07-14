@@ -2,8 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Bump metric-proxy to a6de26a1be2613a20dbd0b3a6fa9844ba62a6154
-      sha: b59c50941ce03c488c4434bb02b1f4a34ab2639f
+      commitTitle: Bump capi-k8s-release to 39cc43dde1b86714f6a3fe97d01dab07c9cc1038
+      sha: a339593d222cec1481a4e2a35be4e6bab0be881a
     path: cf-for-k8s
   path: config/_deps
 kind: LockConfig
