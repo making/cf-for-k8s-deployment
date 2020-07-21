@@ -167,11 +167,13 @@ zones:
 #@overlay/match-child-defaults missing_ok=True
 login:
   url: #@ "https://login." + data.values.system_domain
+#@ if len(data.values.uaa.login.service_provider.key) > 0:
   entityBaseURL: #@ "https://uaa." + data.values.system_domain
   entityID: cloudfoundry-saml-login
   serviceProviderKey: #@ data.values.uaa.login.service_provider.key
   serviceProviderKeyPassword: #@ data.values.uaa.login.service_provider.key_password
   serviceProviderCertificate: #@ data.values.uaa.login.service_provider.certificate
+#@ end
 
 #@overlay/match missing_ok=True
 uaa:
@@ -250,3 +252,12 @@ type: Opaque
 data:
   uaa.key: #@ data.values.internal_certificate.key
   uaa.crt: #@ data.values.internal_certificate.crt
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: #@ data.values.uaa.encryption_key_passphrase_secret_name
+  namespace: #@ data.values.system_namespace
+type: Opaque
+stringData:
+  password: #@ data.values.uaa.encryption_key.passphrase

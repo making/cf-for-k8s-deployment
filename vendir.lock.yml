@@ -2,8 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: Bump capi-k8s-release to 39cc43dde1b86714f6a3fe97d01dab07c9cc1038
-      sha: a339593d222cec1481a4e2a35be4e6bab0be881a
+      commitTitle: 'Merge pull request #290 from cloudfoundry/update-kubeval-unit-test-timeout...'
+      sha: 62ecb552de55b35e01f462575dacb59a2b840854
     path: cf-for-k8s
   path: config/_deps
 kind: LockConfig
