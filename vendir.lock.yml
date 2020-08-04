@@ -2,8 +2,8 @@ apiVersion: vendir.k14s.io/v1alpha1
 directories:
 - contents:
   - git:
-      commitTitle: 'Merge pull request #290 from cloudfoundry/update-kubeval-unit-test-timeout...'
-      sha: 62ecb552de55b35e01f462575dacb59a2b840854
+      commitTitle: 'Merge pull request #334 from cloudfoundry/revert-270-network-policy-cf-system-173371423...'
+      sha: 2edcc5c8d90c8a781014cf503658186903c9b8ce
     path: cf-for-k8s
   path: config/_deps
 kind: LockConfig
