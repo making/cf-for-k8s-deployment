@@ -209,7 +209,7 @@ jobs:
           ./hack/configure-app-registry.sh
 
           sed -i -e "/smtp:/,/from_address:/ d" \
-                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+                 config/_deps/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
           cat <<EOF >> smtp.yml
           smtp:
             host: ${SMTP_HOST}
@@ -221,7 +221,7 @@ jobs:
             starttls: ${SMTP_STARTTLS}
           EOF
           sed -i -e "/#@ end/i $(cat smtp.yml | perl -pe 's/\n/\\n/g')" \
-                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+                 config/_deps/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
 
           wget -q https://raw.githubusercontent.com/making/cf-for-k8s-deployment/master/logo/logo_transparent.png
           # hack
@@ -235,10 +235,8 @@ jobs:
           set +x
           sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
-                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/uaa/k8s/templates/uaa.lib.yml
+                 config/_deps/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
 
-          sed -i -e "s|cf_autodetect_builder: cloudfoundry/cnb.*|cf_autodetect_builder: gcr.io/paketo-buildpacks/builder:base|" \
-                 config/_deps/cf-for-k8s/config/_ytt_lib/github.com/cloudfoundry/capi-k8s-release/values/images.yml
           set -x
           cat <<EOF >> config/_deps/cf-for-k8s/config/values.yml
           inlets_remote: "${INLETS_REMOTE}"
@@ -265,6 +263,7 @@ jobs:
       trigger: true
     - get: synchronizer
   - task: deploy-cf-for-k8s
+    attempts: 2
     params:
       <<: *deploy-params
       <<: *smtp-params
@@ -313,6 +312,7 @@ jobs:
           EOF
 
   - task: smoke-test
+    attempts: 3
     config:
       platform: linux
       image_resource:
@@ -349,7 +349,7 @@ jobs:
       - smoke-test
       trigger: true
   - task: prepare-env
-    config:
+    config: &prepare-env-config
       platform: linux
       image_resource:
         type: docker-image
@@ -410,7 +410,7 @@ jobs:
           ./deployment/hack/install-elephantsql-service-broker.sh
           ./deployment/hack/install-shared-mysql-service-broker.sh
   - task: post-deploy-with-uaa
-    params:
+    params: &devconnect-creds
       CF_MGMT_SECRET: ((cf_mgmt_secret))
       TAS_UUID: ((tas_uuid))
       TAS_NAME: ((tas_name))
@@ -489,6 +489,31 @@ jobs:
           ${KUBECONFIG_VALUE}
           EOF
           kapp delete -a cf -y
+
+- name: clear-harbor-project
+  plan:
+  - task: clear-harbor-project
+    params:
+      HARBOR_URL: https://((docker_hostname))
+      HARBOR_USER: ((docker_username))
+      HARBOR_PASSWORD: ((docker_password))
+      HARBOR_PROJECT: cf-for-k8s
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: relintdockerhubpushbot/cf-for-k8s-ci
+      run:
+        path: bash
+        args:
+        - -ce
+        - |
+          curl -s -k -u ${HARBOR_USER}:${HARBOR_PASSWORD} "${HARBOR_URL}/api/v2.0/projects/${HARBOR_PROJECT}/repositories?page_size=1000" | jq -r ".[].name" | sed "s|${HARBOR_PROJECT}/||g" > repos.txt
+          for r in  $(cat repos.txt);do
+            echo $r;
+            curl -s -k -u ${HARBOR_USER}:${HARBOR_PASSWORD} -XDELETE "${HARBOR_URL}/api/v2.0/projects/${HARBOR_PROJECT}/repositories/$r";
+          done
 
 - name: show-generated-values
   plan:
