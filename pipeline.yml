@@ -15,9 +15,6 @@ params:
     APP_REGISTRY_PASSWORD: ((docker_password))
     APP_REGISTRY_HOSTNAME: ((docker_hostname))
     APP_REGISTRY_REPOSITORY_PREFIX: ((docker_repository))
-    INLETS_REMOTE: ((inlets_remote))
-    INLETS_UPSTREAM: ((inlets_upstream))
-    INLETS_TOKEN: ((inlets_token))    
   smtp: &smtp-params
     SMTP_HOST: ((smtp_host))
     SMTP_PORT: ((smtp_port))
@@ -142,32 +139,18 @@ jobs:
           ./config/_deps/cf-for-k8s/hack/generate-values.sh \
           	    -d ${DOMAIN} > deployment-values.yml
           tar xzf ../certificates/certificates.tgz
-          APPS_DOMAIN=$(bosh int deployment-values.yml --path /app_domains/0)
-          cat <<EOF > ops.yml
-          - type: replace
-            path: /system_certificate
-            value:
-              crt: "$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')"
-              key: "$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')"
-              ca: ""
-          - type: replace
-            path: /workloads_certificate
-            value:
-              crt: "$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')"
-              key: "$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')"
-              ca: ""
-          - type: remove
-            path: /app_domains
-          EOF
-          cat <<EOF > ../deployment-values/deployment-values.yml
-          #@data/values
-          ---
-          app_domains:
-          #@overlay/append
-          - "${APPS_DOMAIN}"
-          EOF
-          bosh int deployment-values.yml -o ops.yml >> ../deployment-values/deployment-values.yml
 
+          BEGIN_LINE=$(grep -n system_certificate deployment-values.yml | awk -F : '{print $1}')
+          END_LINE=$(grep -n internal_certificate deployment-values.yml | awk -F : '{print $1}')
+
+          LE_CERT=$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')
+          LE_KEY=$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')
+
+          sed \
+            -e "${BEGIN_LINE},${END_LINE} s/crt:.*/crt: ${LE_CERT}/" \
+            -e "${BEGIN_LINE},${END_LINE} s/key:.*/key: ${LE_KEY}/" \
+            -e "${BEGIN_LINE},${END_LINE} s/ca:.*/ca: \"\"/" \
+            deployment-values.yml > ../deployment-values/deployment-values.yml
 
   - put: deployment-values
     params:
@@ -236,13 +219,6 @@ jobs:
           sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
                  config/_deps/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
-
-          set -x
-          cat <<EOF >> config/_deps/cf-for-k8s/config/values.yml
-          inlets_remote: "${INLETS_REMOTE}"
-          inlets_upstream: "${INLETS_UPSTREAM}"
-          inlets_token: "${INLETS_TOKEN}"
-          EOF
 
           ytt --ignore-unknown-comments \
               -f config \
