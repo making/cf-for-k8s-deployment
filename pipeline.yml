@@ -1,4 +1,9 @@
 resource_types:
+- name: pivnet
+  type: docker-image
+  source:
+    repository: pivotalcf/pivnet-resource
+    tag: latest-final
 - name: azure-blobstore
   type: docker-image
   source:
@@ -15,6 +20,8 @@ params:
     APP_REGISTRY_PASSWORD: ((docker_password))
     APP_REGISTRY_HOSTNAME: ((docker_hostname))
     APP_REGISTRY_REPOSITORY_PREFIX: ((docker_repository))
+    PIVNET_USERNAME: ((pivnet_username))
+    PIVNET_PASSWORD: ((pivnet_password))
   smtp: &smtp-params
     SMTP_HOST: ((smtp_host))
     SMTP_PORT: ((smtp_port))
@@ -24,6 +31,12 @@ params:
     SMTP_FROM_ADDRESS: ((smtp_from_address))
 
 resources:
+- name: tas-for-kubernetes
+  type: pivnet
+  source:
+    api_token: ((pivnet_api_token))
+    product_slug: tas-for-kubernetes
+    product_version: 0\.4\..*
 - name: reissue-certificates
   type: time
   icon: autorenew
@@ -114,7 +127,10 @@ jobs:
     - get: certificates
       passed:
       - generate-certificate
-    - get: deployment
+    - get: tas-for-kubernetes
+      params:
+        globs: ["*.tar"]
+        unpack: true
   - task: generate-values
     params:
       DOMAIN: ((dns_subdomain)).((dns_suffix))
@@ -125,8 +141,8 @@ jobs:
         source:
           repository: relintdockerhubpushbot/cf-for-k8s-ci
       inputs:
-      - name: deployment
       - name: certificates
+      - name: tas-for-kubernetes
       outputs:
       - name: deployment-values
       run:
@@ -135,14 +151,14 @@ jobs:
         - -cexo
         - pipefail
         - |
-          cd deployment
-          ./config/_deps/cf-for-k8s/hack/generate-values.sh \
+          ./tas-for-kubernetes/tanzu-application-service/bin/generate-values.sh \
           	    -d ${DOMAIN} > deployment-values.yml
-          tar xzf ../certificates/certificates.tgz
+          tar xzf ./certificates/certificates.tgz
 
           BEGIN_LINE=$(grep -n system_certificate deployment-values.yml | awk -F : '{print $1}')
           END_LINE=$(grep -n internal_certificate deployment-values.yml | awk -F : '{print $1}')
 
+          set +x
           LE_CERT=$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')
           LE_KEY=$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')
 
@@ -150,7 +166,7 @@ jobs:
             -e "${BEGIN_LINE},${END_LINE} s/crt:.*/crt: ${LE_CERT}/" \
             -e "${BEGIN_LINE},${END_LINE} s/key:.*/key: ${LE_KEY}/" \
             -e "${BEGIN_LINE},${END_LINE} s/ca:.*/ca: \"\"/" \
-            deployment-values.yml > ../deployment-values/deployment-values.yml
+            deployment-values.yml > ./deployment-values/deployment-values.yml
 
   - put: deployment-values
     params:
@@ -159,7 +175,10 @@ jobs:
 - name: see-changes
   plan:
   - in_parallel:
-    - get: deployment
+    - get: tas-for-kubernetes
+      params:
+        globs: ["*.tar"]
+        unpack: true
     - get: deployment-values
       passed:
       - generate-values
@@ -176,7 +195,7 @@ jobs:
         source:
           repository: relintdockerhubpushbot/cf-for-k8s-ci
       inputs:
-      - name: deployment
+      - name: tas-for-kubernetes
       - name: deployment-values
       run:
         path: bash
@@ -187,12 +206,69 @@ jobs:
           cat <<EOF > ~/.kube/config
           ${KUBECONFIG_VALUE}
           EOF
+          BASE_DIR=$(pwd)
 
-          cd deployment
-          ./hack/configure-app-registry.sh
+          # Configure LoadBalancer
+          cat <<EOF > ${BASE_DIR}/deployment-values/load-balancer-values.yml
+          #@data/values
+          ---
+          enable_load_balancer: True
+          EOF
 
+          # Configure AppRegistry
+          cat <<EOF > ${BASE_DIR}/deployment-values/app-registry-values.yml
+          #@library/ref "@github.com/cloudfoundry/cf-for-k8s"
+          #@data/values
+          ---
+          app_registry:
+            hostname: ${APP_REGISTRY_HOSTNAME}
+            repository_prefix: ${APP_REGISTRY_REPOSITORY_PREFIX}
+            username: ${APP_REGISTRY_USERNAME}
+            password: ${APP_REGISTRY_PASSWORD}
+          EOF
+
+          # Configure SystemRegistry
+          cat <<EOF > ${BASE_DIR}/deployment-values/system-registry-values.yml
+          #@data/values
+          ---
+          system_registry:
+            hostname: registry.pivotal.io
+            username: "${PIVNET_USERNAME}"
+            password: "${PIVNET_PASSWORD}"
+          EOF
+
+          # Configure AppsManager
+          cat <<EOF > ${BASE_DIR}/deployment-values/apps-manager-values.yml
+          #@library/ref "@github.com/pivotal/apps-manager-k8s-release"
+          #@data/values
+          ---
+          apps_manager:
+            currency_lookup: "{\"usd\":\"$\",\"eur\":\"€\"}"
+            display_plan_prices: "false"
+            enable_invitations: "true"
+            poll_interval: 30
+            app_details_poll_interval: 10
+            resources:
+              instances: 1
+              memory: 128
+            whitelabeling:
+              product_name: "Apps Manager"
+              accent_color: "#00A79D"
+              favicon: ""
+              footer_links: "[]"
+          search_server:
+            resources:
+              instances: 1
+              memory: 256
+          invitations:
+            resources:
+              instances: 1
+              memory: 256
+          EOF
+
+          # Patch uaa.lib.yml
           sed -i -e "/smtp:/,/from_address:/ d" \
-                 config/_deps/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
+                 ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
           cat <<EOF >> smtp.yml
           smtp:
             host: ${SMTP_HOST}
@@ -204,33 +280,45 @@ jobs:
             starttls: ${SMTP_STARTTLS}
           EOF
           sed -i -e "/#@ end/i $(cat smtp.yml | perl -pe 's/\n/\\n/g')" \
-                 config/_deps/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
+                 ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
 
           wget -q https://raw.githubusercontent.com/making/cf-for-k8s-deployment/master/logo/logo_transparent.png
-          # hack
+          # Brinding
           cat <<EOF > branding-config.yml
           login:
             branding:
               companyName: cf.maki.lol
-              productLogo: $(cat logo/logo_transparent.png| base64 | tr -d '\n')
-              squareLogo: $(cat logo/logo_transparent.png| base64 | tr -d '\n')
+              productLogo: $(cat logo_transparent.png| base64 | tr -d '\n')
+              squareLogo: $(cat logo_transparent.png| base64 | tr -d '\n')
           EOF
           set +x
           sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
-                 config/_deps/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
+                 ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
 
-          ytt --ignore-unknown-comments \
-              -f config \
-              -f config-optional \
-              -f configuration-values \
-              -f ../deployment-values > rendered/cf-for-k8s.yml
-          kapp deploy -a cf -f rendered/cf-for-k8s.yml -c ${KAPP_OPTS}
+          # Tweak Resource Requirements
+          wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/remove-resource-requirements.yml
+
+          # Add Metrics Server
+          wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/add-metrics-server-components.yml
+          wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/patch-metrics-server.yml
+
+          kapp deploy -y -a cf -f <(\
+            ytt \
+              -f ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config \
+              -f ${BASE_DIR}/deployment-values \
+              --data-values-env YTT_TAS \
+              --data-values-env @github.com/cloudfoundry/cf-for-k8s:YTT_CF \
+              | kbld -f- ) \
+            -c ${KAPP_OPTS}
 
 - name: deploy-cf-for-k8s
   plan:
   - in_parallel:
-    - get: deployment
+    - get: tas-for-kubernetes
+      params:
+        globs: ["*.tar"]
+        unpack: true
       passed:
       - see-changes
     - get: deployment-values
@@ -258,7 +346,7 @@ jobs:
     - get: deployment-values
       passed:
       - deploy-cf-for-k8s
-      trigger: true
+      #trigger: true
     - get: synchronizer
       trigger: true
       passed:
@@ -443,6 +531,7 @@ jobs:
   - in_parallel:
     - get: deployment
   - task: delete-cf-for-k8s
+    attempts: 2
     params:
       KUBECONFIG_VALUE: ((kubeconfig))
       APP_REGISTRY_USERNAME: ((docker_username))
