@@ -22,6 +22,8 @@ params:
     APP_REGISTRY_REPOSITORY_PREFIX: ((docker_repository))
     PIVNET_USERNAME: ((pivnet_username))
     PIVNET_PASSWORD: ((pivnet_password))
+    DOMAIN: ((dns_subdomain)).((dns_suffix))
+    IDP_METADATA: ((idp-metadata))
   smtp: &smtp-params
     SMTP_HOST: ((smtp_host))
     SMTP_PORT: ((smtp_port))
@@ -47,6 +49,12 @@ resources:
   icon: github
   source:
     uri: https://github.com/making/cf-for-k8s-deployment
+    branch: master
+- name: cf-mgmt
+  type: git
+  icon: github
+  source:
+    uri: https://github.com/making/cf-mgmt-cf4k8s
     branch: master
 - name: certificates
   type: azure-blobstore
@@ -124,16 +132,13 @@ jobs:
 - name: generate-values
   plan:
   - in_parallel:
-    - get: certificates
-      passed:
-      - generate-certificate
     - get: tas-for-kubernetes
       params:
         globs: ["*.tar"]
         unpack: true
   - task: generate-values
     params:
-      DOMAIN: ((dns_subdomain)).((dns_suffix))
+      <<: *deploy-params
     config:
       platform: linux
       image_resource:
@@ -141,7 +146,6 @@ jobs:
         source:
           repository: relintdockerhubpushbot/cf-for-k8s-ci
       inputs:
-      - name: certificates
       - name: tas-for-kubernetes
       outputs:
       - name: deployment-values
@@ -151,22 +155,9 @@ jobs:
         - -cexo
         - pipefail
         - |
-          ./tas-for-kubernetes/tanzu-application-service/bin/generate-values.sh \
-          	    -d ${DOMAIN} > deployment-values.yml
-          tar xzf ./certificates/certificates.tgz
-
-          BEGIN_LINE=$(grep -n system_certificate deployment-values.yml | awk -F : '{print $1}')
-          END_LINE=$(grep -n internal_certificate deployment-values.yml | awk -F : '{print $1}')
-
-          set +x
-          LE_CERT=$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')
-          LE_KEY=$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')
-
-          sed \
-            -e "${BEGIN_LINE},${END_LINE} s/crt:.*/crt: ${LE_CERT}/" \
-            -e "${BEGIN_LINE},${END_LINE} s/key:.*/key: ${LE_KEY}/" \
-            -e "${BEGIN_LINE},${END_LINE} s/ca:.*/ca: \"\"/" \
-            deployment-values.yml > ./deployment-values/deployment-values.yml
+          BASE_DIR=$(pwd)
+          ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/bin/generate-values.sh \
+          	    -d ${DOMAIN} > ${BASE_DIR}/deployment-values/deployment-values.yml
 
   - put: deployment-values
     params:
@@ -183,6 +174,9 @@ jobs:
       passed:
       - generate-values
       trigger: true
+    - get: certificates
+      passed:
+      - generate-certificate
   - task: see-changes
     params:
       <<: *deploy-params
@@ -197,6 +191,7 @@ jobs:
       inputs:
       - name: tas-for-kubernetes
       - name: deployment-values
+      - name: certificates
       run:
         path: bash
         args:
@@ -207,6 +202,22 @@ jobs:
           ${KUBECONFIG_VALUE}
           EOF
           BASE_DIR=$(pwd)
+
+          # Let's Encrypt
+          tar xzf ./certificates/certificates.tgz
+
+          BEGIN_LINE=$(grep -n system_certificate ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')
+          END_LINE=$(grep -n internal_certificate ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')
+
+          set +x
+          LE_CERT=$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')
+          LE_KEY=$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')
+
+          sed -i \
+            -e "${BEGIN_LINE},${END_LINE} s/crt:.*/crt: ${LE_CERT}/" \
+            -e "${BEGIN_LINE},${END_LINE} s/key:.*/key: ${LE_KEY}/" \
+            -e "${BEGIN_LINE},${END_LINE} s/ca:.*/ca: \"\"/" \
+            ${BASE_DIR}/deployment-values/deployment-values.yml
 
           # Configure LoadBalancer
           cat <<EOF > ${BASE_DIR}/deployment-values/load-balancer-values.yml
@@ -295,6 +306,32 @@ jobs:
           sed -i -e "/login:/a $(cat branding-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
                  ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
+          set -x
+
+          # SAML
+          cat <<EOF > saml-config.yml
+          login:
+            saml:
+              socket:
+                connectionManagerTimeout: 10000
+                soTimeout: 10000
+              providers:
+                azure-ad:
+                  attributeMappings:
+                    email:
+                    external_groups:
+                    family_name:
+                    given_name:
+                  emailDomain: []
+                  linkText: Azure AD
+                  metadataTrustCheck: false
+                  nameID: urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress
+                  showSamlLoginLink: true
+                  idpMetadata: ${IDP_METADATA}
+          EOF
+          sed -i -e "/login:/a $(cat saml-config.yml | perl -pe 's/\n/\\n/g')" \
+                 -e 's/login:$//'\
+                 ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
 
           # Tweak Resource Requirements
           wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/remove-resource-requirements.yml
@@ -325,6 +362,9 @@ jobs:
       passed:
       - see-changes
       trigger: true
+    - get: certificates
+      passed:
+      - generate-certificate
     - get: synchronizer
   - task: deploy-cf-for-k8s
     attempts: 2
@@ -525,6 +565,40 @@ jobs:
             --scope openid --authorized_grant_types authorization_code \
             --redirect_uri https://devconnect.${APPS_DOMAIN}/api/v1/foundations/${TAS_UUID}/oauth2
           set -e
+
+- name: cf-mgmt-apply
+  plan:
+  - in_parallel:
+    - get: cf-mgmt
+    - get: deployment-values
+      passed:
+      - post-deploy
+      trigger: true
+  - task: prepare-env
+    config:
+      <<: *prepare-env-config
+  - task: cf-mgmt-apply
+    params:
+      USER_ID: cf-mgmt
+      CLIENT_SECRET: ((cf_mgmt_secret))
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: pivotalservices/cf-mgmt
+          tag: 1.0.45
+      inputs:
+      - name: env
+      - name: deployment-values
+      - name: cf-mgmt
+      run:
+        path: bash
+        args:
+        - -cex
+        - |
+          source env/env.sh
+          cf-mgmt apply --config-dir=./cf-mgmt/config
 
 - name: delete-cf-for-k8s
   plan:
