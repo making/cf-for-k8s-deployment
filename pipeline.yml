@@ -382,11 +382,15 @@ jobs:
 - name: smoke-test
   plan:
   - in_parallel:
-    - get: deployment
+    - get: tas-for-kubernetes
+      params:
+        globs: ["*.tar"]
+        unpack: true
+      passed:
+      - deploy-cf-for-k8s
     - get: deployment-values
       passed:
       - deploy-cf-for-k8s
-      #trigger: true
     - get: synchronizer
       trigger: true
       passed:
@@ -425,14 +429,14 @@ jobs:
           repository: relintdockerhubpushbot/cf-test-runner
       inputs:
       - name: env
-      - name: deployment
+      - name: tas-for-kubernetes
       run:
         path: bash
         args:
         - -cex
         - |
           source env/env.sh
-          deployment/config/_deps/cf-for-k8s/hack/run-smoke-tests.sh
+          ./tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/hack/run-smoke-tests.sh
     on_success:
       put: notify
       params:
