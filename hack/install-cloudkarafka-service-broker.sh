@@ -12,8 +12,6 @@ applications:
   instances: 1
   memory: 256M
   path: cloudkarafka-service-broker.jar
-  health-check-type: http
-  health-check-http-endpoint: /actuator/health
   env:
     SERVER_TOMCAT_MAX_THREADS: 4
     JAVA_OPTS: -XX:ReservedCodeCacheSize=32M -Xss512k -Duser.timezone=Asia/Tokyo

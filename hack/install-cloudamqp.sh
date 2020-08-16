@@ -14,15 +14,13 @@ applications:
   instances: 1
   memory: 256M
   env:
-    JAVA_OPTS: -XX:ReservedCodeCacheSize=32M -Xss512k -Duser.timezone=Asia/Tokyo
-    SERVICE_BROKER_ADMIN_PASSWORD: ${CLOUDAMQP_BROKER_ADMIN_PASSWORD}
-    SERVICE_BROKER_CLOUDAMQP_APIKEY: ${SERVICE_BROKER_CLOUDAMQP_APIKEY}
+    JAVA_OPTS: -XX:ReservedCodeCacheSize=32M -Xss512k -Duser.timezone=Asia/Tokyo -Dservice-broker.admin.password=${SERVICE_BROKER_CLOUDAMQP_APIKEY} -Dservice-broker.cloudamqp.api-key=${SERVICE_BROKER_CLOUDAMQP_APIKEY}
     BPL_THREAD_COUNT: 20
     BPL_JVM_THREAD_COUNT: 20
 EOF
 cf push cloudamqp-service-broker -f cloudamqp-service-broker.yml
 set +e
-cf create-service-broker cloudamqp admin ${CLOUDAMQP_BROKER_ADMIN_PASSWORD} https://cloudamqp-service-broker.${APPS_DOMAIN}
+cf create-service-broker cloudamqp admin ${SERVICE_BROKER_CLOUDAMQP_APIKEY} https://cloudamqp-service-broker.${APPS_DOMAIN}
 set -e
 cf enable-service-access cloudamqp
 
