@@ -277,6 +277,10 @@ jobs:
               memory: 256
           EOF
 
+          # Patch
+          sed -i "s/21b6a7b23c249ca7a29cc949b534b12043b78c1449ed4a313663cb9c98d6fd89/feadf8ea9a47eb94028239d37a8897b17542ca3f110629788d89564fa0b69398/" \
+                 ${BASE_DIR}/deployment-values/deployment-values.yml
+
           # Patch uaa.lib.yml
           sed -i -e "/smtp:/,/from_address:/ d" \
                  ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
