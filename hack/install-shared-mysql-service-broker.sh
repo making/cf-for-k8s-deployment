@@ -17,13 +17,14 @@ applications:
   env:
     SERVER_TOMCAT_MAX_THREADS: 4
     JAVA_OPTS: -XX:ReservedCodeCacheSize=32M -Xss512k -Duser.timezone=Asia/Tokyo
-    JAVA_TOOL_OPTIONS: -Dorg.springframework.cloud.bindings.boot.enable=true
+    JAVA_TOOL_OPTIONS: -Dorg.springframework.cloud.bindings.boot.enable=false
     INFO_JAVA_VERSION: \${java.runtime.version}
     INFO_JAVA_VENDOR: \${java.vm.vendor}
     SERVICE_BROKER_ADMIN_PASSWORD: ${SHARED_MYSQL_BROKER_ADMIN_PASSWORD}
     SPRING_DATASOURCE_USERNAME: ${SHARED_MYSQL_USERNAME}
     SPRING_DATASOURCE_PASSWORD: ${SHARED_MYSQL_PASSWORD}
     SPRING_DATASOURCE_URL: jdbc:mysql://${SHARED_MYSQL_HOSTNAME}:${SHARED_MYSQL_PORT}/${SHARED_MYSQL_DATABASE}?allowPublicKeyRetrieval=true&useSSL=false
+    BPL_SPRING_CLOUD_BINDINGS_ENABLED: false
     BPL_THREAD_COUNT: 20
     BPL_JVM_THREAD_COUNT: 20
 EOF
