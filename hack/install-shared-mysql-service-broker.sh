@@ -25,7 +25,7 @@ applications:
     SPRING_DATASOURCE_URL: jdbc:mysql://${SHARED_MYSQL_HOSTNAME}:${SHARED_MYSQL_PORT}/${SHARED_MYSQL_DATABASE}?allowPublicKeyRetrieval=true&useSSL=false
     BPL_THREAD_COUNT: 20
     BPL_JVM_THREAD_COUNT: 20
-    BPL_SPRING_CLOUD_BINDINGS_ENABLED: false
+    BPL_SPRING_CLOUD_BINDINGS_ENABLED: n
 EOF
 cf push shared-mysql-service-broker -f shared-mysql-service-broker.yml
 set +e
