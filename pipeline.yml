@@ -49,7 +49,7 @@ resources:
   icon: github
   source:
     uri: https://github.com/making/cf-for-k8s-deployment
-    branch: master
+    branch: tas
 - name: cf-mgmt
   type: git
   icon: github
@@ -520,6 +520,7 @@ jobs:
           cf create-org demo
           cf create-space demo -o demo
           ./deployment/hack/install-elephantsql-service-broker.sh
+          set +e
           ./deployment/hack/install-shared-mysql-service-broker.sh
   - task: post-deploy-with-uaa
     params: &devconnect-creds
