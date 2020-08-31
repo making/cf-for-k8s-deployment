@@ -221,6 +221,7 @@ jobs:
 
           # Configure LoadBalancer
           cat <<EOF > ${BASE_DIR}/deployment-values/load-balancer-values.yml
+          #@library/ref "@github.com/cloudfoundry/cf-for-k8s"
           #@data/values
           ---
           enable_load_balancer: True
@@ -344,6 +345,23 @@ jobs:
           wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/add-metrics-server-components.yml
           wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/patch-metrics-server.yml
 
+
+          # https://github.com/pivotal/tanzu-application-service/pull/166
+          cat <<EOF > ${BASE_DIR}/deployment-values/apps-manager-network-policies.yml
+          apiVersion: networking.k8s.io/v1
+          kind: NetworkPolicy
+          metadata:
+            name: apps-manager-job-allow-all-egress
+            namespace: cf-system
+          spec:
+            podSelector:
+              matchLabels:
+                job-name: deploy-apps-manager
+            egress:
+            - {}
+            policyTypes:
+            - Egress
+          EOF
           kapp deploy -y -a cf -f <(\
             ytt \
               -f ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config \
@@ -520,8 +538,7 @@ jobs:
           cf create-org demo
           cf create-space demo -o demo
           ./deployment/hack/install-elephantsql-service-broker.sh
-          set +e
-          ./deployment/hack/install-shared-mysql-service-broker.sh
+          # ./deployment/hack/install-shared-mysql-service-broker.sh
   - task: post-deploy-with-uaa
     params: &devconnect-creds
       CF_MGMT_SECRET: ((cf_mgmt_secret))
