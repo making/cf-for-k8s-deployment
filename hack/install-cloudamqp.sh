@@ -16,7 +16,7 @@ applications:
     image: making/cloudamqp-service-broker
   memory: 256M
   env:
-    JAVA_TOOL_OPTIONS: -XX:ReservedCodeCacheSize=32M -Xss512k -Duser.timezone=Asia/Tokyo -Dservice-broker.admin.password=${SERVICE_BROKER_CLOUDAMQP_APIKEY} -Dservice-broker.cloudamqp.api-key=${SERVICE_BROKER_CLOUDAMQP_APIKEY}
+    JAVA_TOOL_OPTIONS: -XX:ReservedCodeCacheSize=32M -Xss512k -Duser.timezone=Asia/Tokyo -Dspring.security.user.password=${SERVICE_BROKER_CLOUDAMQP_APIKEY} -Dservice-broker.cloudamqp.api-key=${SERVICE_BROKER_CLOUDAMQP_APIKEY}
     BPL_THREAD_COUNT: 20
     BPL_JVM_THREAD_COUNT: 20
 EOF
