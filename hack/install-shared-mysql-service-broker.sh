@@ -12,7 +12,6 @@ applications:
   memory: 256M
   docker:
     image: making/shared-mysql-service-broker
-  path: shared-mysql-service-broker.jar
   health-check-type: http
   health-check-http-endpoint: /actuator/health
   env:
