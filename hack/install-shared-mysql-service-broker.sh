@@ -5,12 +5,13 @@ cf create-org shared-mysql
 cf create-space shared-mysql -o shared-mysql
 cf target -o shared-mysql -s shared-mysql
 
-wget -q https://repo1.maven.org/maven2/am/ik/servicebroker/shared-smysql-service-broker/0.0.5/shared-smysql-service-broker-0.0.5.jar -O shared-mysql-service-broker.jar
 cat <<EOF > shared-mysql-service-broker.yml
 applications:
 - name: shared-mysql-service-broker
   instances: 1
   memory: 256M
+  docker:
+    image: making/shared-mysql-service-broker
   path: shared-mysql-service-broker.jar
   health-check-type: http
   health-check-http-endpoint: /actuator/health
