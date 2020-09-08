@@ -226,6 +226,9 @@ jobs:
           #@data/values
           ---
           enable_load_balancer: True
+          remove_resource_requirements: True
+          add_metrics_server_components: True
+          metrics_server_prefer_internal_kubelet_address: True
           EOF
 
           # Configure AppRegistry
@@ -337,13 +340,6 @@ jobs:
           sed -i -e "/login:/a $(cat saml-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
                  ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
-
-          # Tweak Resource Requirements
-          wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/remove-resource-requirements.yml
-
-          # Add Metrics Server
-          wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/add-metrics-server-components.yml
-          wget -q -P ${BASE_DIR}/deployment-values https://raw.githubusercontent.com/cloudfoundry/cf-for-k8s/v0.5.0/config-optional/patch-metrics-server.yml
 
           kapp deploy -y -a cf -f <(\
             ytt \
