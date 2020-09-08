@@ -38,7 +38,7 @@ resources:
   source:
     api_token: ((pivnet_api_token))
     product_slug: tas-for-kubernetes
-    product_version: 0\.4\..*
+    product_version: 0\.5\..*
 - name: reissue-certificates
   type: time
   icon: autorenew
@@ -170,6 +170,7 @@ jobs:
       params:
         globs: ["*.tar"]
         unpack: true
+      trigger: true
     - get: deployment-values
       passed:
       - generate-values
@@ -352,7 +353,16 @@ jobs:
               --data-values-env @github.com/cloudfoundry/cf-for-k8s:YTT_CF \
               | kbld -f- ) \
             -c ${KAPP_OPTS}
-
+    on_success:
+      put: notify
+      params:
+        message: 🆕 New version of tas-for-k8s has been released!
+        alert_type: success
+    on_failure:
+      put: notify
+      params:
+        message: ❌ See chages job failed!
+        alert_type: failed
 - name: deploy-cf-for-k8s
   plan:
   - in_parallel:
@@ -493,6 +503,8 @@ jobs:
       SHARED_MYSQL_PASSWORD: ((shared_mysql_password))
       SHARED_MYSQL_DATABASE: ((shared_mysql_database))
       SHARED_MYSQL_BROKER_ADMIN_PASSWORD: ((shared_mysql_broker_admin_password))
+      SERVICE_BROKER_CLOUDAMQP_APIKEY: ((service_broker_cloudamqp_apikey))
+      CLOUDKARAFKA_API_KEY: ((cloudkarafka_api_key))
     config:
       platform: linux
       image_resource:
@@ -520,7 +532,9 @@ jobs:
           cf create-org demo
           cf create-space demo -o demo
           ./deployment/hack/install-elephantsql-service-broker.sh
-          # ./deployment/hack/install-shared-mysql-service-broker.sh
+          ./deployment/hack/install-shared-mysql-service-broker.sh
+          ./deployment/hack/install-cloudamqp.sh
+          ./deployment/hack/install-cloudkarafka-service-broker.sh
   - task: post-deploy-with-uaa
     params: &devconnect-creds
       CF_MGMT_SECRET: ((cf_mgmt_secret))
