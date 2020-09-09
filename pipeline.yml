@@ -219,6 +219,11 @@ jobs:
             -e "${BEGIN_LINE},${END_LINE} s/key:.*/key: ${LE_KEY}/" \
             -e "${BEGIN_LINE},${END_LINE} s/ca:.*/ca: \"\"/" \
             ${BASE_DIR}/deployment-values/deployment-values.yml
+          set -x
+
+          BEGIN_LINE=$(grep -n log_cache_ca ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')
+          END_LINE=$((2 + $(grep -n log_cache_syslog ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')))
+          sed -i -e "${BEGIN_LINE},${END_LINE} d" ${BASE_DIR}/deployment-values/deployment-values.yml
 
           # Configure LoadBalancer
           cat <<EOF > ${BASE_DIR}/deployment-values/load-balancer-values.yml
