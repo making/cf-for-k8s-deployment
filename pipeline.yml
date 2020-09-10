@@ -271,7 +271,6 @@ jobs:
             app_details_poll_interval: 10
             resources:
               instances: 1
-              memory: 128
             whitelabeling:
               product_name: "Apps Manager"
               accent_color: "#00A79D"
@@ -280,11 +279,6 @@ jobs:
           search_server:
             resources:
               instances: 1
-              memory: 256
-          invitations:
-            resources:
-              instances: 1
-              memory: 256
           EOF
 
           # Patch
