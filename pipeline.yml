@@ -24,6 +24,18 @@ params:
     PIVNET_PASSWORD: ((pivnet_password))
     DOMAIN: ((dns_subdomain)).((dns_suffix))
     IDP_METADATA: ((idp-metadata))
+    CCDB_USERNAME: ((ccdb_username))
+    CCDB_PASSWORD: ((ccdb_password))
+    CCDB_HOSTNAME: ((postgresql_host))
+    CCDB_CA_CERT: ((postgresql_tls_ca))
+    UAADB_USERNAME: ((uaadb_username))
+    UAADB_PASSWORD: ((uaadb_password))
+    UAADB_HOSTNAME: ((postgresql_host))
+    UAADB_CA_CERT: ((postgresql_tls_ca))
+    USAGE_SERVICE_USERNAME:  ((usage_service_username))
+    USAGE_SERVICE_PASSWORD: ((usage_service_password))
+    USAGE_SERVICE_HOSTNAME: ((postgresql_host))
+    USAGE_SERVICE_CA_CERT: ((postgresql_tls_ca))
   smtp: &smtp-params
     SMTP_HOST: ((smtp_host))
     SMTP_PORT: ((smtp_port))
@@ -206,56 +218,84 @@ jobs:
 
           # Let's Encrypt
           tar xzf ./certificates/certificates.tgz
-
-          BEGIN_LINE=$(grep -n system_certificate ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')
-          END_LINE=$(grep -n internal_certificate ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')
-
           set +x
           LE_CERT=$(openssl base64 -in certificates/_.${DOMAIN}.crt | tr -d '\n')
           LE_KEY=$(openssl base64 -in certificates/_.${DOMAIN}.key | tr -d '\n')
 
-          sed -i \
-            -e "${BEGIN_LINE},${END_LINE} s/crt:.*/crt: ${LE_CERT}/" \
-            -e "${BEGIN_LINE},${END_LINE} s/key:.*/key: ${LE_KEY}/" \
-            -e "${BEGIN_LINE},${END_LINE} s/ca:.*/ca: \"\"/" \
-            ${BASE_DIR}/deployment-values/deployment-values.yml
-          set -x
 
-          BEGIN_LINE=$(grep -n log_cache_ca ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')
-          END_LINE=$((2 + $(grep -n log_cache_syslog ${BASE_DIR}/deployment-values/deployment-values.yml | awk -F : '{print $1}')))
-          sed -i -e "${BEGIN_LINE},${END_LINE} d" ${BASE_DIR}/deployment-values/deployment-values.yml
+          cat <<EOF > ccdb.ca
+          ${CCDB_CA_CERT}
+          EOF
+          cat <<EOF > uaadb.ca
+          ${UAADB_CA_CERT}
+          EOF
+          cat <<EOF > usage_service.ca
+          ${USAGE_SERVICE_CA_CERT}
+          EOF
 
-          # Configure LoadBalancer
-          cat <<EOF > ${BASE_DIR}/deployment-values/load-balancer-values.yml
-          #@library/ref "@github.com/cloudfoundry/cf-for-k8s"
+          cat <<EOF > ${BASE_DIR}/deployment-values/values.yml
           #@data/values
           ---
           enable_load_balancer: True
-          remove_resource_requirements: True
-          add_metrics_server_components: True
-          metrics_server_prefer_internal_kubelet_address: True
-          EOF
+          system_domain: ${DOMAIN}
+          app_domains:
+          #@overlay/append
+          - apps.${DOMAIN}
 
-          # Configure AppRegistry
-          cat <<EOF > ${BASE_DIR}/deployment-values/app-registry-values.yml
-          #@library/ref "@github.com/cloudfoundry/cf-for-k8s"
-          #@data/values
-          ---
           app_registry:
             hostname: ${APP_REGISTRY_HOSTNAME}
             repository_prefix: ${APP_REGISTRY_REPOSITORY_PREFIX}
             username: ${APP_REGISTRY_USERNAME}
             password: ${APP_REGISTRY_PASSWORD}
-          EOF
 
-          # Configure SystemRegistry
-          cat <<EOF > ${BASE_DIR}/deployment-values/system-registry-values.yml
-          #@data/values
-          ---
           system_registry:
             hostname: registry.pivotal.io
             username: "${PIVNET_USERNAME}"
             password: "${PIVNET_PASSWORD}"
+
+          capi:
+            database:
+              host: ${CCDB_HOSTNAME}
+              user: ${CCDB_USERNAME}
+              password: ${CCDB_PASSWORD}
+              name: ${CCDB_USERNAME}
+              ca_cert: |
+          $(cat ccdb.ca | sed 's/^/      /g')
+          uaa:
+            database:
+              host: ${UAADB_HOSTNAME}
+              user: ${UAADB_USERNAME}
+              password: ${UAADB_PASSWORD}
+              name: ${UAADB_USERNAME}
+              ca_cert: |
+          $(cat uaadb.ca | sed 's/^/      /g')
+          usage_service:
+            database:
+              host: ${USAGE_SERVICE_HOSTNAME}
+              user: ${USAGE_SERVICE_USERNAME}
+              password: ${USAGE_SERVICE_PASSWORD}
+              name: ${USAGE_SERVICE_USERNAME}
+              ca_cert: |
+          $(cat usage_service.ca | sed 's/^/      /g')
+
+          system_certificate:
+            crt: ${LE_CERT}
+            key: ${LE_KEY}
+            ca: ""
+          workloads_certificate:
+            crt: ${LE_CERT}
+            key: ${LE_KEY}
+            ca: ""
+          EOF
+          set -x
+
+          cat <<EOF > ${BASE_DIR}/deployment-values/tweek.yml
+          #@library/ref "@github.com/cloudfoundry/cf-for-k8s/config"
+          #@data/values
+          ---
+          remove_resource_requirements: True
+          add_metrics_server_components: True
+          metrics_server_prefer_internal_kubelet_address: True
           EOF
 
           # Configure AppsManager
@@ -281,9 +321,9 @@ jobs:
               instances: 1
           EOF
 
-          # Patch
-          sed -i "s/21b6a7b23c249ca7a29cc949b534b12043b78c1449ed4a313663cb9c98d6fd89/feadf8ea9a47eb94028239d37a8897b17542ca3f110629788d89564fa0b69398/" \
-                 ${BASE_DIR}/deployment-values/deployment-values.yml
+          ## Patch
+          ## sed -i "s/1e0b7bb244e594e803a0b390d09d2aa16733930446ecbccdec8feaa003d293f3/e013ab4b0f11d0536c9f1596b8a8c4e2702640b01e01785130c1c7e646bd7819/" \
+          ##        ${BASE_DIR}/deployment-values/deployment-values.yml
 
           # Patch uaa.lib.yml
           sed -i -e "/smtp:/,/from_address:/ d" \
@@ -339,15 +379,13 @@ jobs:
           sed -i -e "/login:/a $(cat saml-config.yml | perl -pe 's/\n/\\n/g')" \
                  -e 's/login:$//'\
                  ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config/_ytt_lib/github.com/cloudfoundry/cf-for-k8s/config/uaa/_ytt_lib/uaa/k8s/templates/uaa.lib.yml
-
-          kapp deploy -y -a cf -f <(\
-            ytt \
-              -f ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config \
-              -f ${BASE_DIR}/deployment-values \
-              --data-values-env YTT_TAS \
-              --data-values-env @github.com/cloudfoundry/cf-for-k8s:YTT_CF \
-              | kbld -f- ) \
-            -c ${KAPP_OPTS}
+          ## sed -i 's|"@github.com/cloudfoundry/cf-for-k8s"|"@github.com/cloudfoundry/cf-for-k8s/config"|g' deployment-values/*
+          ytt \
+            -f ${BASE_DIR}/tas-for-kubernetes/tanzu-application-service/config \
+            -f ${BASE_DIR}/deployment-values \
+            --data-values-env YTT_TAS \
+            | kbld -f- > /tmp/tas.yml
+          kapp deploy -y -a cf -f /tmp/tas.yml -c ${KAPP_OPTS}
     on_success:
       put: notify
       params:
@@ -490,6 +528,7 @@ jobs:
           EOF
           cp /usr/local/bin/bosh env/
   - task: post-deploy
+    attempts: 2
     params:
       ELEPHANTSQL_API_KEY: ((elephantsql_api_key))
       SHARED_MYSQL_HOSTNAME: ((shared_mysql_hostname))
